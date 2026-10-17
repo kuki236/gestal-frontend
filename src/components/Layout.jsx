@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Check, RotateCcw, Users } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -19,7 +20,12 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useToast } from '@/components/ui/toast';
-import { resetDemoData } from '@/services/api';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import {
+  isBackendOnline,
+  onConnectionChange,
+  resetDemoData,
+} from '@/services/api';
 import { cn } from '@/lib/utils';
 
 const ROLE_UPPER = {
@@ -70,6 +76,12 @@ export function Layout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const { toast } = useToast();
+  const [online, setOnline] = useState(true);
+
+  useEffect(() => {
+    setOnline(isBackendOnline());
+    return onConnectionChange(setOnline);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -262,12 +274,16 @@ export function Layout({ children }) {
                         {ROLE_UPPER[rol] || rol}
                       </div>
                       <div className="text-xs font-extrabold text-[#1C242B]">
-                        {user?.nombre || 'Ana Torres'}
+                        {user?.nombre}
                       </div>
                       <div className="text-[11px] text-[#5A6570] pb-2">
                         {rol === 'ESTUDIANTE'
                           ? 'Solicitante'
-                          : `Área: ${user?.area || 'Soporte informático'}`}
+                          : user?.area
+                          ? `Área: ${user.area}`
+                          : rol === 'ADMINISTRADOR' || rol === 'ADMIN'
+                          ? 'Todas las áreas'
+                          : 'Sin área asignada'}
                       </div>
                     </button>
                   </DropdownMenuTrigger>
@@ -323,7 +339,19 @@ export function Layout({ children }) {
             </nav>
           </aside>
 
-          <main className="min-w-0 w-full">{children}</main>
+          <main className="min-w-0 w-full">
+            {!online && (
+              <Alert variant="warning" className="mb-4">
+                <AlertTitle>Sin conexión con el servidor</AlertTitle>
+                <AlertDescription>
+                  Estás viendo datos de demostración guardados en este navegador.
+                  Los cambios no llegan a la base de datos hasta que el backend
+                  vuelva a responder.
+                </AlertDescription>
+              </Alert>
+            )}
+            {children}
+          </main>
         </div>
       </div>
     </div>

@@ -743,6 +743,15 @@ function AdministracionContent() {
        * TAB 2: ADMINISTRACIÓN DE USUARIOS, ROLES Y ÁREAS (HU-15 / RF-18)
        * ================================================================== */}
       {activeTab === 'USUARIOS' && (
+        <Alert variant="warning">
+          <AlertTitle>Solo demostración</AlertTitle>
+          <AlertDescription>
+            Los usuarios que crees o edites aquí se guardan solo en este navegador: el backend todavía no tiene endpoints de usuarios, así que no podrán iniciar sesión contra el servidor.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {activeTab === 'USUARIOS' && (
         <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-5 items-start">
           {/* Left Column: Padrón de usuarios */}
           <Card className="p-5 sm:p-6 space-y-4">
@@ -972,6 +981,15 @@ function AdministracionContent() {
       {/* ====================================================================
        * TAB 3: CATÁLOGO DE CATEGORÍAS, ÁREAS RESPONSABLES Y SLA (HU-16..18)
        * ================================================================== */}
+      {activeTab === 'CATALOGOS' && (
+        <Alert variant="warning">
+          <AlertTitle>Solo demostración</AlertTitle>
+          <AlertDescription>
+            Las categorías y los SLA que edites aquí se guardan solo en este navegador: el backend todavía no tiene endpoints para modificarlas.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {activeTab === 'CATALOGOS' && (
         <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-5 items-start">
           {/* Left Column: Lista de Categorías y Áreas */}

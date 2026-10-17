@@ -32,14 +32,21 @@ const DEMO_ACCOUNTS = [
   },
 ];
 
+const ROL_LABELS = {
+  ESTUDIANTE: 'Estudiante',
+  TECNICO: 'Técnico',
+  SUPERVISOR: 'Supervisor',
+  ADMINISTRADOR: 'Administrador',
+  ADMIN: 'Administrador',
+};
+
 export default function LoginPage() {
-  const { login, isAuthenticated, user, hydrated } = useAuth();
+  const { login, isAuthenticated, user, hydrated, sessionExpired } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
   const [correo, setCorreo] = useState('ana.torres@example.edu');
   const [password, setPassword] = useState('gestal123');
-  const [rolDemo, setRolDemo] = useState('Estudiante');
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -70,6 +77,10 @@ export default function LoginPage() {
     return Object.keys(nextErrors).length === 0;
   };
 
+  const rolDemo =
+    DEMO_ACCOUNTS.find((acc) => acc.correo === correo.trim().toLowerCase())?.rol ||
+    null;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -81,7 +92,7 @@ export default function LoginPage() {
       toast({
         variant: 'success',
         title: `Bienvenido(a), ${loggedUser.nombre}`,
-        description: `Sesión iniciada como ${rolDemo}.`,
+        description: `Sesión iniciada como ${ROL_LABELS[loggedUser.rol] || loggedUser.rol}.`,
       });
       const target =
         loggedUser.rol === 'ADMIN' || loggedUser.rol === 'ADMINISTRADOR'
@@ -98,7 +109,6 @@ export default function LoginPage() {
   };
 
   const handleSelectRole = (acc) => {
-    setRolDemo(acc.rol);
     setCorreo(acc.correo);
     setPassword(acc.password);
     setError('');
@@ -126,7 +136,9 @@ export default function LoginPage() {
             </h1>
 
             <p className="mt-2 text-xs text-[#5A6570]">
-              Recorrido de demostración · {rolDemo}
+              {rolDemo
+                ? `Recorrido de demostración · ${rolDemo}`
+                : 'Ingresa con tu correo institucional.'}
             </p>
 
             {/* Quick Role Switcher Pills for Demo/Evaluation */}
@@ -149,6 +161,15 @@ export default function LoginPage() {
                 );
               })}
             </div>
+
+            {sessionExpired && !error && (
+              <Alert variant="warning" className="mb-3">
+                <AlertTitle>Tu sesión terminó</AlertTitle>
+                <AlertDescription>
+                  Vuelve a iniciar sesión para continuar.
+                </AlertDescription>
+              </Alert>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-3" noValidate>
               <BoxField

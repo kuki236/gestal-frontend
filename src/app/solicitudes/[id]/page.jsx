@@ -17,6 +17,14 @@ import {
   BoxSelect,
   BoxTextarea,
 } from '@/components/ui/box-field';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -58,6 +66,7 @@ function DetalleSolicitudContent({ id }) {
   const [editErrors, setEditErrors] = useState({});
   const [savingEdit, setSavingEdit] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const [nuevoComentario, setNuevoComentario] = useState('');
   const [commentError, setCommentError] = useState('');
@@ -141,6 +150,7 @@ function DetalleSolicitudContent({ id }) {
         title: 'Solicitud eliminada',
         description: `${solicitud.codigo} fue dada de baja lógicamente.`,
       });
+      setConfirmDelete(false);
       handleVolverListado();
     } catch (err) {
       toast({
@@ -165,8 +175,7 @@ function DetalleSolicitudContent({ id }) {
       setSubmittingComment(true);
       await agregarComentario(
         solicitud.id,
-        nuevoComentario.trim(),
-        user?.nombre || 'Ana Torres'
+        nuevoComentario.trim()
       );
       setNuevoComentario('');
       await cargarDetalle();
@@ -187,6 +196,8 @@ function DetalleSolicitudContent({ id }) {
   const handleVolverListado = () => {
     if (rol === 'SUPERVISOR' || rol === 'ADMIN' || rol === 'ADMINISTRADOR') {
       router.push('/gestion');
+    } else if (rol === 'TECNICO' && solicitud) {
+      router.push(`/gestion?id=${solicitud.id}`);
     } else {
       router.push('/solicitudes');
     }
@@ -250,7 +261,11 @@ function DetalleSolicitudContent({ id }) {
           <p className="mt-2 text-xs text-[#5A6570]">
             {rol === 'ESTUDIANTE'
               ? 'Información y avances de tu solicitud.'
-              : `${solicitud.codigo} · Solicitud de tu área`}
+              : rol === 'TECNICO'
+              ? `${solicitud.codigo} · Solicitud asignada a ti`
+              : rol === 'SUPERVISOR'
+              ? `${solicitud.codigo} · Solicitud de tu área`
+              : solicitud.codigo}
           </p>
         </div>
 
@@ -260,7 +275,7 @@ function DetalleSolicitudContent({ id }) {
           onClick={handleVolverListado}
           className="hidden sm:inline-flex h-10 px-6 font-bold shrink-0"
         >
-          Volver al listado
+          {rol === 'TECNICO' ? 'Volver a la atención' : 'Volver al listado'}
         </Button>
       </div>
 
@@ -279,7 +294,7 @@ function DetalleSolicitudContent({ id }) {
               </div>
 
               {(canEditPut || canDelete) && !editing && (
-                <div className="flex items-center gap-1.5 opacity-0 group-hover/card:opacity-100 focus-within:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1.5">
                   {canEditPut && (
                     <button
                       type="button"
@@ -294,11 +309,11 @@ function DetalleSolicitudContent({ id }) {
                     <button
                       type="button"
                       disabled={deleting}
-                      onClick={handleEliminarSolicitud}
+                      onClick={() => setConfirmDelete(true)}
                       className="inline-flex items-center gap-1 rounded-md border border-[#E9B8B8] bg-[#F7E6E6] px-2.5 py-1 text-[11px] font-bold text-[#A61C1C] hover:bg-[#F1D4D4] cursor-pointer"
                     >
                       <Trash2 className="h-3 w-3" />
-                      <span>{deleting ? 'Eliminando...' : 'Eliminar'}</span>
+                      <span>Eliminar</span>
                     </button>
                   )}
                 </div>
@@ -350,6 +365,13 @@ function DetalleSolicitudContent({ id }) {
                   />
                 </BoxField>
 
+                {rol !== 'ESTUDIANTE' && (
+                  <p className="text-[11px] text-[#5A6570]">
+                    Al guardar, la prioridad vuelve a la inicial de la categoría
+                    elegida.
+                  </p>
+                )}
+
                 <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
                   <Button
                     type="submit"
@@ -379,24 +401,23 @@ function DetalleSolicitudContent({ id }) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 pt-1 text-xs text-[#2E3842]">
                   <div>
                     <span className="font-semibold text-[#5A6570]">Categoría: </span>
-                    {solicitud.categoriaNombre || 'Soporte informático'}
+                    {solicitud.categoriaNombre || '—'}
                   </div>
                   <div>
                     <span className="font-semibold text-[#5A6570]">Área responsable: </span>
-                    {solicitud.areaNombre || 'Soporte informático'}
+                    {solicitud.areaNombre || '—'}
                   </div>
                   <div>
                     <span className="font-semibold text-[#5A6570]">Ubicación: </span>
-                    {solicitud.ubicacion || 'Laboratorio 204 · Pabellón nuevo'}
+                    {solicitud.ubicacion || '—'}
                   </div>
                   <div>
                     <span className="font-semibold text-[#5A6570]">Solicitante: </span>
-                    {solicitud.solicitanteNombre || 'Ana Torres'}
+                    {solicitud.solicitanteNombre || '—'}
                   </div>
                   <div>
                     <span className="font-semibold text-[#5A6570]">Fecha: </span>
-                    {formatDateTime(solicitud.fechaCreacion) ||
-                      '16 oct. 2026 · 09:00'}
+                    {formatDateTime(solicitud.fechaCreacion) || '—'}
                   </div>
                   <div>
                     <span className="font-semibold text-[#5A6570]">Prioridad: </span>
@@ -419,7 +440,7 @@ function DetalleSolicitudContent({ id }) {
                   {solicitud.motivoRechazo?.replace(
                     /^Motivo de rechazo:\s*/i,
                     ''
-                  ) || 'la incidencia ya fue registrada en GEST-2026-000.'}
+                  ) || 'sin detalle.'}
                 </AlertDescription>
               </Alert>
             )}
@@ -439,8 +460,9 @@ function DetalleSolicitudContent({ id }) {
                     className="rounded-lg border border-[#D8D5CE] bg-white px-4 py-3"
                   >
                     <div className="text-xs font-extrabold text-[#1C242B]">
-                      {c.autorNombre} · {c.rol || 'Estudiante'} ·{' '}
-                      {formatShortDateTime(c.fecha) || '16 oct. 09:10'}
+                      {c.autorNombre}
+                      {c.rol ? ` · ${c.rol}` : ''} ·{' '}
+                      {formatShortDateTime(c.fecha)}
                     </div>
                     <div className="mt-1 text-xs text-[#3E4852]">{c.texto}</div>
                   </div>
@@ -469,6 +491,11 @@ function DetalleSolicitudContent({ id }) {
                     }}
                   />
                 </BoxField>
+
+                <p className="text-[11px] text-[#5A6570]">
+                  Los comentarios se guardan en este navegador; el servidor aún
+                  no los almacena.
+                </p>
 
                 <div>
                   <Button
@@ -502,12 +529,13 @@ function DetalleSolicitudContent({ id }) {
                   item.estadoNuevo === 'REGISTRADO')
                   ? 'Solicitud registrada'
                   : item.estadoNuevo === 'RECHAZADO'
-                  ? 'Solicitud duplicada'
+                  ? 'Solicitud rechazada'
                   : 'Cambio de estado';
-              const cleanUser = (item.usuarioNombre || 'Ana Torres').replace(
+              const cleanUser = (item.usuarioNombre || '').replace(
                 /\s*\(.*?\)/g,
                 ''
               );
+              const fechaTexto = formatDateTime(item.fecha);
 
               return (
                 <div
@@ -518,8 +546,7 @@ function DetalleSolicitudContent({ id }) {
                     {estadoLabel} · {actionLabel}
                   </div>
                   <div className="mt-1 text-[11px] text-[#5A6570]">
-                    {formatDateTime(item.fecha) || '16 oct. 2026 · 09:00'} ·{' '}
-                    {cleanUser}
+                    {[fechaTexto, cleanUser].filter(Boolean).join(' · ')}
                   </div>
                 </div>
               );
@@ -527,6 +554,38 @@ function DetalleSolicitudContent({ id }) {
           </div>
         </Card>
       </div>
+
+      <Dialog open={confirmDelete} onOpenChange={(open) => !deleting && setConfirmDelete(open)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>¿Eliminar {solicitud.codigo}?</DialogTitle>
+            <DialogDescription>
+              La solicitud se dará de baja lógica: dejará de aparecer en los
+              listados, pero se conserva en la base de datos.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmDelete(false)}
+              disabled={deleting}
+              className="h-10 px-5 font-bold"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleEliminarSolicitud}
+              disabled={deleting}
+              className="h-10 px-5 font-bold"
+            >
+              {deleting ? 'Eliminando...' : 'Eliminar solicitud'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Mobile Bottom Button: Volver al listado */}
       <div className="sm:hidden">

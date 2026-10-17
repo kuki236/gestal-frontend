@@ -242,6 +242,59 @@ function saveDemoSolicitudes(list) {
   window.localStorage.setItem(STORAGE_FALLBACK_SOLICITUDES, JSON.stringify(list));
 }
 
+const CONNECTION_EVENT = 'gestal:conexion';
+const SESSION_EXPIRED_EVENT = 'gestal:sesion-expirada';
+
+function notifyConnection(online) {
+  if (!isBrowser()) return;
+  const previous = window.__gestalOnline;
+  window.__gestalOnline = online;
+  if (previous !== online) {
+    window.dispatchEvent(new CustomEvent(CONNECTION_EVENT, { detail: { online } }));
+  }
+}
+
+export function isBackendOnline() {
+  if (!isBrowser()) return true;
+  return window.__gestalOnline !== false;
+}
+
+export function onConnectionChange(callback) {
+  if (!isBrowser()) return () => {};
+  const handler = (e) => callback(e.detail.online);
+  window.addEventListener(CONNECTION_EVENT, handler);
+  return () => window.removeEventListener(CONNECTION_EVENT, handler);
+}
+
+export function onSessionExpired(callback) {
+  if (!isBrowser()) return () => {};
+  window.addEventListener(SESSION_EXPIRED_EVENT, callback);
+  return () => window.removeEventListener(SESSION_EXPIRED_EVENT, callback);
+}
+
+// Un token del modo sin conexión ("jwt-ROL-...") no es un JWT real y el
+// backend lo rechaza. Un JWT real trae "exp" en segundos.
+export function isTokenUsable(token) {
+  if (!token) return false;
+  const parts = token.split('.');
+  if (parts.length !== 3) return false;
+  try {
+    const payload = JSON.parse(
+      atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))
+    );
+    return !payload.exp || payload.exp * 1000 > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+function expireSession() {
+  clearAuthSession();
+  if (isBrowser()) {
+    window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+  }
+}
+
 class ApiError extends Error {
   constructor(status, message, errors = null) {
     super(message);
@@ -267,10 +320,12 @@ async function request(path, options = {}) {
       headers
     });
   } catch {
+    notifyConnection(false);
     const err = new Error('BACKEND_UNREACHABLE');
     err.isNetworkError = true;
     throw err;
   }
+  notifyConnection(true);
 
   if (response.status === 204) {
     return null;
@@ -281,6 +336,18 @@ async function request(path, options = {}) {
     body = await response.json();
   } catch {
     body = null;
+  }
+
+  // Spring Security responde 401/403 sin cuerpo cuando el token falta, venció o
+  // no es válido. En ese caso la sesión ya no sirve: se cierra y se vuelve al login.
+  const isLogin = path === '/api/auth/login';
+  if (
+    !isLogin &&
+    token &&
+    (response.status === 401 || (response.status === 403 && !isTokenUsable(token)))
+  ) {
+    expireSession();
+    throw new ApiError(401, 'Tu sesión expiró. Vuelve a iniciar sesión.');
   }
 
   if (!response.ok) {
@@ -422,20 +489,7 @@ export async function listarSolicitudesApi() {
       return all.filter((s) => s.solicitante === user.nombre);
     }
     if (user.rol === 'TECNICO') {
-      return all
-        .map((s) => {
-          if (String(s.id) === '1' && !s.responsable && s.estado === 'NUEVO') {
-            return {
-              ...s,
-              responsable: 'Luis Rojas',
-              estado: 'ASIGNADO',
-              prioridad: 'ALTA',
-              fechaActualizacion: '2026-10-16T09:20:00'
-            };
-          }
-          return s;
-        })
-        .filter((s) => s.responsable === user.nombre);
+      return all.filter((s) => s.responsable === user.nombre);
     }
     if (user.rol === 'SUPERVISOR' && user.area) {
       return all.filter((s) => s.areaResponsable === user.area);
@@ -458,20 +512,6 @@ export async function obtenerSolicitudApi(id) {
     const user = getStoredUser();
     if (user?.rol === 'ESTUDIANTE' && item.solicitante !== user.nombre) {
       throw new ApiError(403, 'No tiene permisos para ver una solicitud ajena');
-    }
-    if (
-      user?.rol === 'TECNICO' &&
-      String(item.id) === '1' &&
-      !item.responsable &&
-      item.estado === 'NUEVO'
-    ) {
-      return {
-        ...item,
-        responsable: 'Luis Rojas',
-        estado: 'ASIGNADO',
-        prioridad: 'ALTA',
-        fechaActualizacion: '2026-10-16T09:20:00'
-      };
     }
     return item;
   }
@@ -615,14 +655,6 @@ export async function cambiarEstadoApi(id, { estado, motivo }) {
     }
     const updated = {
       ...current,
-      responsable:
-        !current.responsable && (estado === 'EN_PROCESO' || estado === 'RESUELTO')
-          ? 'Luis Rojas'
-          : current.responsable,
-      prioridad:
-        !current.responsable && (estado === 'EN_PROCESO' || estado === 'RESUELTO')
-          ? 'ALTA'
-          : current.prioridad,
       estado,
       motivoRechazo: estado === 'RECHAZADO' ? motivo.trim() : current.motivoRechazo,
       fechaActualizacion: new Date().toISOString().slice(0, 19)
@@ -655,26 +687,7 @@ export function obtenerComentariosSolicitud(solicitudId) {
   try {
     const raw = window.localStorage.getItem(STORAGE_COMENTARIOS);
     const map = raw ? JSON.parse(raw) : {};
-    if (map[String(solicitudId)]) {
-      return map[String(solicitudId)];
-    }
-    if (String(solicitudId) === '1') {
-      const user = getStoredUser();
-      const item = loadDemoSolicitudes().find((s) => String(s.id) === '1');
-      if (user?.rol === 'ESTUDIANTE' && (!item || item.estado === 'NUEVO')) {
-        return [];
-      }
-      return [
-        {
-          id: 'c-init-1',
-          autor: 'Ana Torres',
-          rol: 'Estudiante',
-          fecha: '2026-10-16T09:10:00',
-          texto: 'El laboratorio está disponible a partir de las 10:00.'
-        }
-      ];
-    }
-    return [];
+    return map[String(solicitudId)] || [];
   } catch {
     return [];
   }
@@ -692,11 +705,11 @@ export function agregarComentarioSolicitud(solicitudId, texto, usuario) {
       SUPERVISOR: 'Supervisor',
       ADMINISTRADOR: 'Administrador',
       ADMIN: 'Administrador'
-    }[usuario?.rol] || 'Estudiante';
+    }[usuario?.rol] || '';
 
   const nuevo = {
     id: `c-${Date.now()}`,
-    autor: usuario?.nombre || 'Ana Torres',
+    autor: usuario?.nombre || 'Usuario',
     rol: rolLegible,
     fecha: new Date().toISOString().slice(0, 19),
     texto: texto.trim()

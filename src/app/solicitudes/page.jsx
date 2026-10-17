@@ -98,7 +98,7 @@ function SolicitudesContent() {
           </h1>
           <p className="mt-2 text-xs text-[#5A6570]">
             {rol === 'TECNICO'
-              ? `Solo solicitudes de ${user?.nombre || 'Luis Rojas'} · Prioridad de mayor a menor; a igual prioridad, las más antiguas primero.`
+              ? `Solo solicitudes de ${user?.nombre} · Prioridad de mayor a menor; a igual prioridad, las más antiguas primero.`
               : 'Consulta el estado y el seguimiento de tus servicios.'}
           </p>
         </div>

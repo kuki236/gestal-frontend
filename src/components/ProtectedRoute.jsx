@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
 
@@ -8,13 +8,18 @@ export function ProtectedRoute({ allowedRoles = null, children }) {
   const { hydrated, isAuthenticated, user } = useAuth();
   const router = useRouter();
 
-  const normalizedAllowed = allowedRoles
-    ? allowedRoles.flatMap((r) =>
-        r === 'ADMIN' || r === 'ADMINISTRADOR'
-          ? ['ADMIN', 'ADMINISTRADOR']
-          : [r]
-      )
-    : null;
+  const allowedKey = allowedRoles ? allowedRoles.join(',') : '';
+  const normalizedAllowed = useMemo(
+    () =>
+      allowedKey
+        ? allowedKey.split(',').flatMap((r) =>
+            r === 'ADMIN' || r === 'ADMINISTRADOR'
+              ? ['ADMIN', 'ADMINISTRADOR']
+              : [r]
+          )
+        : null,
+    [allowedKey]
+  );
 
   useEffect(() => {
     if (!hydrated) return;

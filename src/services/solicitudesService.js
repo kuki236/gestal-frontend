@@ -25,111 +25,63 @@ function isBrowser() {
   );
 }
 
+function readHistorialMap() {
+  if (!isBrowser()) return {};
+  try {
+    const raw = window.localStorage.getItem(STORAGE_HISTORIAL_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+// El backend aún no expone el historial de estados. Se arma con lo que sí es
+// real: el registro (fechaCreacion), los cambios hechos desde este navegador y,
+// si el estado actual no coincide con el último evento conocido, el último
+// cambio informado por el servidor (fechaActualizacion).
 function loadLocalHistorial(solicitud) {
-  const defaultHistory = [
+  const historial = [
     {
-      id: `h-init-${solicitud.id}-1`,
+      id: `h-${solicitud.id}-registro`,
       estadoNuevo: 'NUEVO',
-      fecha: solicitud.fechaCreacion || '2026-10-16T09:00:00',
-      usuarioNombre: solicitud.solicitante || 'Ana Torres',
+      fecha: solicitud.fechaCreacion,
+      usuarioNombre: solicitud.solicitante || null,
       comentario: 'Solicitud registrada en el sistema.',
     },
   ];
 
-  if (
-    solicitud.estado === 'ASIGNADO' ||
-    solicitud.estado === 'EN_PROCESO' ||
-    solicitud.estado === 'RESUELTO' ||
-    solicitud.estado === 'CERRADO'
-  ) {
-    defaultHistory.push({
-      id: `h-init-${solicitud.id}-2`,
-      estadoNuevo: 'ASIGNADO',
-      fecha: '2026-10-16T09:20:00',
-      usuarioNombre: 'María Vega',
-      comentario: `Asignado a ${solicitud.responsable || 'Luis Rojas'} · Prioridad ${solicitud.prioridad || 'MEDIA'}.`,
+  const locales = readHistorialMap()[String(solicitud.id)];
+  if (Array.isArray(locales)) {
+    historial.push(...locales.filter((e) => e.estadoNuevo && e.estadoNuevo !== 'NUEVO'));
+  }
+
+  const ultimo = historial[historial.length - 1];
+  if (solicitud.estado && ultimo.estadoNuevo !== solicitud.estado) {
+    historial.push({
+      id: `h-${solicitud.id}-actual`,
+      estadoNuevo: solicitud.estado,
+      fecha: solicitud.fechaActualizacion,
+      usuarioNombre: null,
+      comentario: 'Último cambio registrado en el servidor.',
     });
   }
 
-  if (
-    solicitud.estado === 'EN_PROCESO' ||
-    solicitud.estado === 'RESUELTO' ||
-    solicitud.estado === 'CERRADO'
-  ) {
-    defaultHistory.push({
-      id: `h-init-${solicitud.id}-3`,
-      estadoNuevo: 'EN_PROCESO',
-      fecha: '2026-10-16T09:45:00',
-      usuarioNombre: solicitud.responsable || 'Luis Rojas',
-      comentario: 'Revisión técnica iniciada en el ambiente reportado.',
-    });
-  }
-
-  if (solicitud.estado === 'RESUELTO' || solicitud.estado === 'CERRADO') {
-    defaultHistory.push({
-      id: `h-init-${solicitud.id}-4`,
-      estadoNuevo: 'RESUELTO',
-      fecha: '2026-10-16T11:00:00',
-      usuarioNombre: solicitud.responsable || 'Luis Rojas',
-      comentario: 'Incidencia técnica solucionada y verificada en sitio.',
-    });
-  }
-
-  if (solicitud.estado === 'CERRADO') {
-    defaultHistory.push({
-      id: `h-init-${solicitud.id}-5`,
-      estadoNuevo: 'CERRADO',
-      fecha: '2026-10-16T11:30:00',
-      usuarioNombre: 'María Vega',
-      comentario: 'Solicitud validada y cerrada por supervisión.',
-    });
-  }
-
-  if (solicitud.estado === 'RECHAZADO') {
-    defaultHistory.push({
-      id: `h-init-${solicitud.id}-6`,
-      estadoNuevo: 'RECHAZADO',
-      fecha: '2026-10-16T09:30:00',
-      usuarioNombre: 'María Vega',
-      comentario:
-        solicitud.motivoRechazo || 'Solicitud rechazada por supervisión.',
-    });
-  }
-
-  if (!isBrowser()) return defaultHistory;
-
-  try {
-    const raw = window.localStorage.getItem(STORAGE_HISTORIAL_KEY);
-    const map = raw ? JSON.parse(raw) : {};
-    const customEvents = map[String(solicitud.id)];
-    if (Array.isArray(customEvents) && customEvents.length > 0) {
-      return customEvents;
-    }
-    return defaultHistory;
-  } catch {
-    return defaultHistory;
-  }
+  return historial;
 }
 
 function appendLocalHistorial(solicitudId, event) {
   if (!isBrowser()) return;
   try {
-    const raw = window.localStorage.getItem(STORAGE_HISTORIAL_KEY);
-    const map = raw ? JSON.parse(raw) : {};
+    const map = readHistorialMap();
     const existing = Array.isArray(map[String(solicitudId)])
       ? map[String(solicitudId)]
-      : null;
-    const base = existing || [
-      {
-        id: `h-init-${solicitudId}-1`,
-        estadoNuevo: 'NUEVO',
-        fecha: '2026-10-16T09:00:00',
-        usuarioNombre: 'Ana Torres',
-        comentario: 'Solicitud registrada en el sistema.',
-      },
-    ];
+      : [];
+    const ultimo = existing[existing.length - 1];
+    if (ultimo && ultimo.estadoNuevo === event.estadoNuevo && event.estadoNuevo !== 'ASIGNADO') {
+      return;
+    }
     map[String(solicitudId)] = [
-      ...base,
+      ...existing,
       {
         id: `h-${Date.now()}`,
         fecha: new Date().toISOString().slice(0, 19),
@@ -167,12 +119,11 @@ function normalizeSolicitud(raw) {
     ...raw,
     titulo,
     descripcion: rawDesc,
-    categoriaNombre: raw.categoria || raw.categoriaNombre || 'Soporte informático',
-    areaNombre:
-      raw.areaResponsable || raw.areaNombre || 'Soporte informático',
-    solicitanteNombre: raw.solicitante || raw.solicitanteNombre || 'Ana Torres',
+    categoriaNombre: raw.categoria || raw.categoriaNombre || '',
+    areaNombre: raw.areaResponsable || raw.areaNombre || '',
+    solicitanteNombre: raw.solicitante || raw.solicitanteNombre || '',
     responsableNombre,
-    responsableId: raw.responsableId || tecMatch?.id || (responsableNombre ? 2 : null),
+    responsableId: raw.responsableId || tecMatch?.id || null,
     actualizadoEn: raw.fechaActualizacion || raw.fechaCreacion,
     historial: loadLocalHistorial(raw),
     comentarios,
@@ -239,13 +190,6 @@ export async function crearSolicitud({
     ubicacion: ubicacion || 'Campus Universitario UNMSM',
   });
 
-  const user = getStoredUser();
-  appendLocalHistorial(created.id, {
-    estadoNuevo: 'NUEVO',
-    usuarioNombre: user?.nombre || 'Ana Torres',
-    comentario: 'Solicitud registrada por el estudiante.',
-  });
-
   return normalizeSolicitud(created);
 }
 
@@ -291,21 +235,9 @@ export async function asignarSolicitud(
   appendLocalHistorial(id, {
     estadoNuevo: updated.estado || 'ASIGNADO',
     usuarioNombre: usuarioNombre || getStoredUser()?.nombre || 'Supervisor',
-    comentario: `Responsable asignado: ${responsableNombre || 'Luis Rojas'}.`,
-  });
-
-  return normalizeSolicitud(updated);
-}
-
-export async function cambiarPrioridadSolicitud(
-  id,
-  prioridad,
-  usuarioNombre,
-  responsableId = 2
-) {
-  const updated = await asignarResponsableApi(id, {
-    responsableId: Number(responsableId),
-    prioridad,
+    comentario: responsableNombre
+      ? `Responsable asignado: ${responsableNombre}.`
+      : 'Responsable asignado.',
   });
 
   return normalizeSolicitud(updated);
@@ -340,17 +272,24 @@ export async function listarCategorias() {
   }));
 }
 
-export async function listarTecnicos() {
+// El backend no expone un endpoint de usuarios: la lista sale del padrón local
+// (mismos ids que db/gestal.sql). Con area se devuelven solo los técnicos de esa área.
+export async function listarTecnicos(area = null) {
   const users = loadAdminUsers();
   const tecnicosActivos = users
     .filter((u) => u.rol === 'TECNICO' && u.activo !== false)
     .map((u) => ({
       id: u.id,
       nombre: u.nombre,
-      area: u.area || 'Soporte informático',
-      especialidad: u.area || 'Soporte informático',
+      area: u.area || '',
+      especialidad: u.area || '',
     }));
-  return tecnicosActivos.length > 0 ? tecnicosActivos : SEED_TECNICOS;
+  const base = tecnicosActivos.length > 0 ? tecnicosActivos : SEED_TECNICOS;
+  if (!area) return base;
+  const delArea = base.filter(
+    (t) => (t.area || '').toLowerCase() === area.toLowerCase()
+  );
+  return delArea.length > 0 ? delArea : base;
 }
 
 export async function listarUsuariosSistema() {

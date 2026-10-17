@@ -30,10 +30,10 @@ export function SolicitudCard({
     ESTADOS_CONFIG[solicitud.estado]?.label || solicitud.estado || 'Nuevo';
   const prioridadLabel =
     PRIORIDAD_LABELS[solicitud.prioridad] || solicitud.prioridad || 'Media';
-  const fechaTexto =
-    formatShortDate(solicitud.fechaCreacion || solicitud.actualizadoEn) ||
-    '16 oct. 2026';
-  const categoriaTexto = solicitud.categoriaNombre || 'Soporte informático';
+  const fechaTexto = formatShortDate(
+    solicitud.fechaCreacion || solicitud.actualizadoEn
+  );
+  const categoriaTexto = solicitud.categoriaNombre;
 
   return (
     <div
@@ -56,14 +56,16 @@ export function SolicitudCard({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
         <div className="min-w-0">
           <div className="text-xs font-extrabold text-[#7B1E2B]">
-            {solicitud.codigo} · {categoriaTexto}
+            {solicitud.codigo}
+            {categoriaTexto ? ` · ${categoriaTexto}` : ''}
           </div>
           <div className="mt-1 text-base font-extrabold text-[#1C242B] leading-snug">
             {solicitud.titulo}
           </div>
           <div className="mt-1 text-xs text-[#5A6570]">
             <span className="sm:hidden">{estadoLabel} · </span>
-            Prioridad {prioridadLabel} · {fechaTexto}
+            Prioridad {prioridadLabel}
+            {fechaTexto ? ` · ${fechaTexto}` : ''}
             {solicitud.ubicacion && (
               <span className="hidden md:inline"> · {solicitud.ubicacion}</span>
             )}
