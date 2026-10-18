@@ -5,7 +5,9 @@ import {
   clearAuthSession,
   getStoredToken,
   getStoredUser,
+  isTokenUsable,
   loginApi,
+  onSessionExpired,
   saveAuthSession
 } from '../services/api';
 
@@ -16,15 +18,31 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [hydrated, setHydrated] = useState(false);
 
+  const [sessionExpired, setSessionExpired] = useState(false);
+
   useEffect(() => {
-    setToken(getStoredToken());
-    setUser(getStoredUser());
+    const storedToken = getStoredToken();
+    // Un JWT real vencido no sirve: se descarta antes de llamar al backend.
+    if (storedToken && storedToken.split('.').length === 3 && !isTokenUsable(storedToken)) {
+      clearAuthSession();
+      setSessionExpired(true);
+    } else {
+      setToken(storedToken);
+      setUser(getStoredUser());
+    }
     setHydrated(true);
+
+    return onSessionExpired(() => {
+      setToken(null);
+      setUser(null);
+      setSessionExpired(true);
+    });
   }, []);
 
   async function login(correo, contrasena) {
     const response = await loginApi(correo, contrasena);
     saveAuthSession(response);
+    setSessionExpired(false);
     setToken(response.token);
     const nextUser = {
       correo: response.correo,
@@ -47,6 +65,7 @@ export function AuthProvider({ children }) {
     user,
     hydrated,
     isAuthenticated: Boolean(token && user),
+    sessionExpired,
     login,
     logout
   };

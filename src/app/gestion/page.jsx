@@ -23,7 +23,6 @@ import {
   obtenerSolicitudPorId,
   cambiarEstadoSolicitud,
   asignarSolicitud,
-  cambiarPrioridadSolicitud,
   listarCategorias,
   listarTecnicos,
 } from '@/services/solicitudesService';
@@ -112,7 +111,7 @@ function TecnicoAtencionView({ id, user }) {
         solicitud.id,
         nuevoEstado,
         comentarioAccion,
-        user?.nombre || 'Luis Rojas'
+        user?.nombre
       );
       await cargarSolicitud();
       toast({
@@ -158,17 +157,15 @@ function TecnicoAtencionView({ id, user }) {
 
   const prioridadLabel =
     PRIORIDAD_LABELS[solicitud.prioridad] || solicitud.prioridad || 'Alta';
-  const fechaAsignacion =
-    formatDateTime(solicitud.actualizadoEn || solicitud.fechaCreacion) ||
-    '16 oct. 2026 · 09:20';
-  const horaCorta =
-    formatShortDateTime(solicitud.actualizadoEn || solicitud.fechaCreacion) ||
-    '16 oct. 09:45';
+  const fechaActualizacion = formatDateTime(
+    solicitud.actualizadoEn || solicitud.fechaCreacion
+  );
+  const horaCorta = formatShortDateTime(
+    solicitud.actualizadoEn || solicitud.fechaCreacion
+  );
 
-  const isAsignado =
-    solicitud.estado === 'ASIGNADO' ||
-    solicitud.estado === 'NUEVO' ||
-    solicitud.estado === 'REGISTRADO';
+  const isAsignado = solicitud.estado === 'ASIGNADO';
+  const isRechazado = solicitud.estado === 'RECHAZADO';
   const isEnProceso =
     solicitud.estado === 'EN_PROCESO' || solicitud.estado === 'EN_ATENCION';
   const isResuelto =
@@ -186,9 +183,9 @@ function TecnicoAtencionView({ id, user }) {
             Atención de solicitud
           </h1>
           <p className="mt-2 text-xs text-[#5A6570]">
-            {solicitud.codigo} ·{' '}
-            {solicitud.categoriaNombre || 'Soporte informático'} · Prioridad{' '}
-            {prioridadLabel}
+            {solicitud.codigo}
+            {solicitud.categoriaNombre ? ` · ${solicitud.categoriaNombre}` : ''} ·
+            Prioridad {prioridadLabel}
           </p>
         </div>
 
@@ -220,21 +217,23 @@ function TecnicoAtencionView({ id, user }) {
         <div className="space-y-1 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-x-6 sm:gap-y-2.5 sm:rounded-lg sm:bg-[#FAF8F5] sm:border sm:border-[#EBE8E1] sm:p-3.5 text-xs text-[#2E3842] leading-relaxed">
           <div>
             <span className="font-semibold text-[#5A6570]">Solicitante:</span>{' '}
-            {solicitud.solicitanteNombre || 'Ana Torres'}
+            {solicitud.solicitanteNombre || '—'}
           </div>
           <div>
             <span className="font-semibold text-[#5A6570]">Ubicación:</span>{' '}
-            {solicitud.ubicacion || 'Laboratorio 204 · Pabellón nuevo'}
+            {solicitud.ubicacion || '—'}
           </div>
           <div>
             <span className="font-semibold text-[#5A6570]">
               Técnico responsable:
             </span>{' '}
-            {solicitud.responsableNombre || user?.nombre || 'Luis Rojas'}
+            {solicitud.responsableNombre || user?.nombre}
           </div>
           <div>
-            <span className="font-semibold text-[#5A6570]">Asignación:</span>{' '}
-            {fechaAsignacion}
+            <span className="font-semibold text-[#5A6570]">
+              Última actualización:
+            </span>{' '}
+            {fechaActualizacion || '—'}
           </div>
         </div>
 
@@ -273,8 +272,7 @@ function TecnicoAtencionView({ id, user }) {
             <Alert variant="success" className="py-3.5">
               <AlertTitle>Atención iniciada</AlertTitle>
               <AlertDescription>
-                Asignado → En proceso · {horaCorta} ·{' '}
-                {user?.nombre || 'Luis Rojas'}.
+                Asignado → En proceso · {horaCorta} · {user?.nombre}.
               </AlertDescription>
             </Alert>
 
@@ -306,21 +304,38 @@ function TecnicoAtencionView({ id, user }) {
           </>
         )}
 
+        {isRechazado && (
+          <Alert variant="destructive" className="py-3.5">
+            <AlertTitle>Solicitud rechazada</AlertTitle>
+            <AlertDescription>
+              {solicitud.motivoRechazo
+                ? `Motivo: ${solicitud.motivoRechazo}`
+                : 'El supervisor rechazó esta solicitud.'}
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Estado Resuelto (d-gestion-resuelto) */}
         {isResuelto && (
           <>
             <Alert variant="success" className="py-3.5">
-              <AlertTitle>Resolución registrada</AlertTitle>
+              <AlertTitle>
+                {solicitud.estado === 'CERRADO'
+                  ? 'Solicitud cerrada'
+                  : 'Resolución registrada'}
+              </AlertTitle>
               <AlertDescription>
-                En proceso → Resuelto · {horaCorta} ·{' '}
-                {user?.nombre || 'Luis Rojas'}. El supervisor revisará la
-                atención antes del cierre.
+                {solicitud.estado === 'CERRADO'
+                  ? `El supervisor confirmó la atención · ${horaCorta}.`
+                  : `En proceso → Resuelto · ${horaCorta} · ${user?.nombre}. El supervisor revisará la atención antes del cierre.`}
               </AlertDescription>
             </Alert>
 
-            <p className="text-[11px] text-[#5A6570]">
-              El cierre y el rechazo corresponden al supervisor del área.
-            </p>
+            {solicitud.estado !== 'CERRADO' && (
+              <p className="text-[11px] text-[#5A6570]">
+                El cierre y el rechazo corresponden al supervisor del área.
+              </p>
+            )}
           </>
         )}
       </Card>
@@ -350,6 +365,9 @@ function TecnicoAtencionView({ id, user }) {
 function SupervisorGestionAreaView({ initialTicketId, user }) {
   const router = useRouter();
   const { toast } = useToast();
+  // El backend solo deja asignar, cerrar y rechazar al supervisor: el
+  // administrador ve las áreas en modo consulta.
+  const isAdmin = user?.rol === 'ADMINISTRADOR' || user?.rol === 'ADMIN';
 
   const [solicitudes, setSolicitudes] = useState([]);
   const [categorias, setCategorias] = useState([]);
@@ -371,7 +389,7 @@ function SupervisorGestionAreaView({ initialTicketId, user }) {
 
   // Management form fields
   const [responsableId, setResponsableId] = useState('');
-  const [prioridad, setPrioridad] = useState('ALTA');
+  const [prioridad, setPrioridad] = useState('MEDIA');
   const [assignError, setAssignError] = useState('');
   const [savingAssign, setSavingAssign] = useState(false);
   const [assignBanner, setAssignBanner] = useState(null);
@@ -388,8 +406,8 @@ function SupervisorGestionAreaView({ initialTicketId, user }) {
     setSelectedSolicitud(sol);
     if (sol) {
       setSelectedId(sol.id);
-      setResponsableId(sol.responsableId ? String(sol.responsableId) : '2');
-      setPrioridad(sol.prioridad || 'ALTA');
+      setResponsableId(sol.responsableId ? String(sol.responsableId) : '');
+      setPrioridad(sol.prioridad || 'MEDIA');
     }
   };
 
@@ -403,7 +421,7 @@ function SupervisorGestionAreaView({ initialTicketId, user }) {
       const [sols, cats, tecs] = await Promise.all([
         listarSolicitudes(filtros, user),
         listarCategorias(),
-        listarTecnicos(),
+        listarTecnicos(isAdmin ? null : user?.area),
       ]);
 
       const lista = Array.isArray(sols) ? sols : [];
@@ -491,14 +509,14 @@ function SupervisorGestionAreaView({ initialTicketId, user }) {
       const tecnicoObj = tecnicos.find(
         (t) => String(t.id) === String(responsableId)
       );
-      const nombreTecnico = tecnicoObj?.nombre || 'Luis Rojas';
+      const nombreTecnico = tecnicoObj?.nombre || 'el técnico seleccionado';
       const prioLabel = PRIORIDAD_LABELS[prioridad] || prioridad || 'Alta';
 
       await asignarSolicitud(
         selectedSolicitud.id,
         Number(responsableId),
         nombreTecnico,
-        user?.nombre || 'María Vega',
+        user?.nombre,
         prioridad
       );
 
@@ -510,14 +528,13 @@ function SupervisorGestionAreaView({ initialTicketId, user }) {
         prev.map((item) => (item.id === updated.id ? updated : item))
       );
 
-      const horaCorta =
-        formatShortDateTime(updated.actualizadoEn) || '16 oct. 09:20';
+      const horaCorta = formatShortDateTime(updated.actualizadoEn);
 
       if (prevEstado === 'NUEVO' || prevEstado === 'REGISTRADO') {
         // Exact Figma d-gestion-asignada
         setAssignBanner({
           title: 'Asignación guardada',
-          text: `${nombreTecnico} · Prioridad ${prioLabel}. Nuevo → Asignado · ${horaCorta} · ${user?.nombre || 'María Vega'}.`,
+          text: `${nombreTecnico} · Prioridad ${prioLabel}. Nuevo → Asignado · ${horaCorta} · ${user?.nombre}.`,
         });
       } else if (prevResponsable && prevResponsable !== nombreTecnico) {
         // Exact Figma d-gestion-reasignada
@@ -558,7 +575,7 @@ function SupervisorGestionAreaView({ initialTicketId, user }) {
         selectedSolicitud.id,
         'RECHAZADO',
         motivoRechazo.trim(),
-        user?.nombre || 'María Vega'
+        user?.nombre
       );
       const updated = await obtenerSolicitudPorId(selectedSolicitud.id);
       sincronizarSeleccion(updated);
@@ -586,7 +603,7 @@ function SupervisorGestionAreaView({ initialTicketId, user }) {
         selectedSolicitud.id,
         'CERRADO',
         'Atención verificada.',
-        user?.nombre || 'María Vega'
+        user?.nombre
       );
       const updated = await obtenerSolicitudPorId(selectedSolicitud.id);
       sincronizarSeleccion(updated);
@@ -750,6 +767,13 @@ function SupervisorGestionAreaView({ initialTicketId, user }) {
    *   2. 2-column Master-Detail split (lg:grid-cols-[1.15fr_0.85fr] items-start):
    *      Left column = Listado de solicitudes | Right column = Sticky Gestionar card
    * ---------------------------------------------------------------------- */
+  const categoriasDelArea =
+    !isAdmin && user?.area
+      ? categorias.filter(
+          (c) => (c.areaNombre || '').toLowerCase() === user.area.toLowerCase()
+        )
+      : categorias;
+
   const isSelectedNuevo =
     selectedSolicitud?.estado === 'NUEVO' ||
     selectedSolicitud?.estado === 'REGISTRADO';
@@ -766,11 +790,14 @@ function SupervisorGestionAreaView({ initialTicketId, user }) {
             GESTIÓN DE SERVICIOS
           </div>
           <h1 className="mt-1.5 text-2xl sm:text-[28px] font-extrabold tracking-tight text-[#1C242B]">
-            Gestión de área
+            {isAdmin ? 'Supervisión de áreas' : 'Gestión de área'}
           </h1>
           <p className="mt-2 text-xs text-[#5A6570]">
-            {user?.area || 'Soporte informático'} · Solicitudes dirigidas a tu
-            área.
+            {isAdmin
+              ? 'Todas las áreas · Vista de consulta. La asignación y los cambios de estado los realiza el supervisor de cada área.'
+              : user?.area
+              ? `${user.area} · Solicitudes dirigidas a tu área.`
+              : 'Solicitudes de todas las áreas.'}
           </p>
         </div>
 
@@ -805,14 +832,12 @@ function SupervisorGestionAreaView({ initialTicketId, user }) {
                 value={filtroCategoria}
                 onChange={(e) => setFiltroCategoria(e.target.value)}
               >
-                <option value="">Soporte informático</option>
-                {categorias
-                  .filter((c) => c.nombre !== 'Soporte informático')
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre}
-                    </option>
-                  ))}
+                <option value="">Todas</option>
+                {categoriasDelArea.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
               </BoxSelect>
             </BoxField>
 
@@ -900,7 +925,7 @@ function SupervisorGestionAreaView({ initialTicketId, user }) {
             <Card className="p-5 sm:p-6 space-y-3.5 lg:sticky lg:top-6">
               <div className="flex items-start justify-between gap-2.5">
                 <h2 className="text-base font-extrabold text-[#1C242B]">
-                  Gestionar {selectedSolicitud.codigo}
+                  {isAdmin ? 'Solicitud' : 'Gestionar'} {selectedSolicitud.codigo}
                 </h2>
                 <EstadoBadge estado={selectedSolicitud.estado} />
               </div>
@@ -910,14 +935,13 @@ function SupervisorGestionAreaView({ initialTicketId, user }) {
                   <span className="font-semibold text-[#5A6570]">
                     Solicitante:
                   </span>{' '}
-                  {selectedSolicitud.solicitanteNombre || 'Ana Torres'}
+                  {selectedSolicitud.solicitanteNombre || '—'}
                 </div>
                 <div>
                   <span className="font-semibold text-[#5A6570]">
                     Ubicación:
                   </span>{' '}
-                  {selectedSolicitud.ubicacion ||
-                    'Laboratorio 204 · Pabellón nuevo'}
+                  {selectedSolicitud.ubicacion || '—'}
                 </div>
                 <div>
                   <span className="font-semibold text-[#5A6570]">
@@ -933,9 +957,8 @@ function SupervisorGestionAreaView({ initialTicketId, user }) {
                   <Alert variant="success" className="py-3.5">
                     <AlertTitle>Cierre confirmado</AlertTitle>
                     <AlertDescription>
-                      {formatDateTime(selectedSolicitud.actualizadoEn) ||
-                        '16 oct. 2026 · 11:30'}{' '}
-                      · {user?.nombre || 'María Vega'}. Atención verificada.
+                      {formatDateTime(selectedSolicitud.actualizadoEn)}. Atención
+                      verificada por el supervisor del área.
                     </AlertDescription>
                   </Alert>
 
@@ -965,7 +988,7 @@ function SupervisorGestionAreaView({ initialTicketId, user }) {
                       {selectedSolicitud.motivoRechazo?.replace(
                         /^Motivo de rechazo:\s*/i,
                         ''
-                      ) || 'la incidencia ya está registrada en GEST-2026-000.'}
+                      ) || 'sin detalle.'}
                     </AlertDescription>
                   </Alert>
 
@@ -974,6 +997,26 @@ function SupervisorGestionAreaView({ initialTicketId, user }) {
                     ni responsable.
                   </p>
 
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      router.push(`/solicitudes/${selectedSolicitud.id}`)
+                    }
+                    className="w-full h-10 font-bold"
+                  >
+                    Ver detalle y seguimiento
+                  </Button>
+                </>
+              ) : isAdmin ? (
+                <>
+                  <p className="text-xs text-[#5A6570]">
+                    Prioridad{' '}
+                    {PRIORIDAD_LABELS[selectedSolicitud.prioridad] ||
+                      selectedSolicitud.prioridad}
+                    . La asignación, el cierre y el rechazo los realiza el
+                    supervisor del área.
+                  </p>
                   <Button
                     type="button"
                     variant="outline"
@@ -1003,7 +1046,8 @@ function SupervisorGestionAreaView({ initialTicketId, user }) {
                       <option value="">Sin técnico seleccionado</option>
                       {tecnicos.map((t) => (
                         <option key={t.id} value={t.id}>
-                          {t.nombre} · {t.area || 'Soporte informático'}
+                          {t.nombre}
+                          {t.area ? ` · ${t.area}` : ''}
                         </option>
                       ))}
                     </BoxSelect>

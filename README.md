@@ -27,7 +27,7 @@ Cumple el alcance de **Fase II — Construcción Full Stack** hasta **Primera ve
   - `PUT /api/solicitudes/{id}` — Edición de datos de solicitud.
   - `PATCH /api/solicitudes/{id}/responsable` — Asignación/reasignación de técnico y cambio de prioridad (`NUEVO → ASIGNADO`).
   - `PATCH /api/solicitudes/{id}/estado` — Transiciones de estado por rol (`ASIGNADO → EN_PROCESO → RESUELTO → CERRADO` y `RECHAZADO`).
-  - `DELETE /api/solicitudes/{id}` — Baja lógica para rol `SUPERVISOR`.
+  - `DELETE /api/solicitudes/{id}` — Baja lógica para rol `ADMINISTRADOR`.
   - `GET /api/categorias` y `GET /api/prioridades` — Catálogos de servicio.
 - **Manejo de sesión en cliente (`Cookies`, `LocalStorage` y `SessionStorage`):**
   - `LocalStorage`: `gestal_auth_token`, `gestal_auth_user`.
@@ -56,7 +56,6 @@ npm run dev
 Variables en `.env.example`:
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8080
-VITE_API_URL=http://localhost:8080
 ```
 
 ---

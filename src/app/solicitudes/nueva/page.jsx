@@ -123,9 +123,9 @@ function NuevaSolicitudContent() {
       PRIORIDAD_LABELS[solicitudCreada.prioridad] ||
       solicitudCreada.prioridad ||
       'Media';
-    const fechaConfirmada =
-      formatDateTime(solicitudCreada.fechaCreacion)?.replace(' · ', ', ') ||
-      '16 oct. 2026, 09:00';
+    const fechaConfirmada = formatDateTime(
+      solicitudCreada.fechaCreacion
+    )?.replace(' · ', ', ');
 
     return (
       <div className="space-y-4 max-w-[780px]">
